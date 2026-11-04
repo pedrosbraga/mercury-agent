@@ -20,6 +20,7 @@ import type { ChannelAttachment } from '../../types/channel.js';
 export const MAX_FILES = 4;
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_PDF_BYTES = 15 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 export interface InlineAttachment {
   /** Display name; only its basename is kept. */
@@ -34,11 +35,14 @@ export type UploadResult =
   | { ok: true; attachments: ChannelAttachment[] }
   | { ok: false; error: string };
 
-const IMAGE_EXTENSIONS = new Map([
+const MEDIA_EXTENSIONS = new Map([
   ['image/jpeg', '.jpg'],
   ['image/png', '.png'],
   ['image/webp', '.webp'],
   ['image/gif', '.gif'],
+  ['video/mp4', '.mp4'],
+  ['video/webm', '.webm'],
+  ['video/quicktime', '.mov'],
 ]);
 
 const PDF_MIME = 'application/pdf';
@@ -50,7 +54,7 @@ export function uploadsDir(now: Date = new Date()): string {
 }
 
 /** Recognises the formats the model can take, from the bytes rather than the label. */
-function sniff(bytes: Buffer): { mime: string; kind: 'image' | 'document' } | null {
+function sniff(bytes: Buffer): { mime: string; kind: 'image' | 'document' | 'video' } | null {
   if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return { mime: 'image/png', kind: 'image' };
   }
@@ -69,6 +73,14 @@ function sniff(bytes: Buffer): { mime: string; kind: 'image' | 'document' } | nu
   }
   if (bytes.length >= 5 && bytes.subarray(0, 5).toString('latin1') === '%PDF-') {
     return { mime: PDF_MIME, kind: 'document' };
+  }
+  if (bytes.length >= 12 && bytes.subarray(4, 8).toString('latin1') === 'ftyp') {
+    // ISO BMFF: mp4 and mov share the `ftyp` box; the major brand tells them apart.
+    return { mime: bytes.subarray(8, 12).toString('latin1') === 'qt  ' ? 'video/quicktime' : 'video/mp4', kind: 'video' };
+  }
+  if (bytes.length >= 8 && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) {
+    // EBML header: webm (and mkv).
+    return { mime: 'video/webm', kind: 'video' };
   }
   return null;
 }
@@ -120,9 +132,9 @@ export function storeInlineAttachments(input: unknown, now: Date = new Date()): 
 
     const sniffed = sniff(bytes);
     if (!sniffed) {
-      return { ok: false, error: `attachment ${index + 1} is not a supported image (png, jpeg, webp, gif) or PDF` };
+      return { ok: false, error: `attachment ${index + 1} is not a supported image, video (mp4, webm, mov) or PDF` };
     }
-    const limit = sniffed.kind === 'image' ? MAX_IMAGE_BYTES : MAX_PDF_BYTES;
+    const limit = sniffed.kind === 'image' ? MAX_IMAGE_BYTES : sniffed.kind === 'video' ? MAX_VIDEO_BYTES : MAX_PDF_BYTES;
     if (bytes.length > limit) {
       return {
         ok: false,
@@ -134,7 +146,7 @@ export function storeInlineAttachments(input: unknown, now: Date = new Date()): 
         kind: sniffed.kind,
         path: '',
         mime: sniffed.mime,
-        name: safeFileName(item.name, IMAGE_EXTENSIONS.get(sniffed.mime) ?? '.pdf'),
+        name: safeFileName(item.name, MEDIA_EXTENSIONS.get(sniffed.mime) ?? '.pdf'),
       },
       bytes,
     });
@@ -166,7 +178,7 @@ const FILE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[
 
 export interface AttachmentRef {
   name: string;
-  kind: 'image' | 'document';
+  kind: 'image' | 'document' | 'video';
   mime?: string;
   ref: string;
 }

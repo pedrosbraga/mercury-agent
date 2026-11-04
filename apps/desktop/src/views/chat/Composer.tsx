@@ -35,6 +35,7 @@ interface Pending {
 const MAX_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 export interface ComposerProps {
   surface: Surface;
@@ -193,12 +194,14 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
     const accepted: Pending[] = [];
     for (const f of incoming.slice(0, Math.max(0, room))) {
       const isImage = f.type.startsWith("image/");
+      const isVideo = f.type.startsWith("video/");
       const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
-      if (!isImage && !isPdf) { setError(`${f.name}: only images and PDFs can be attached.`); continue; }
-      const limit = isImage ? MAX_IMAGE_BYTES : MAX_PDF_BYTES;
+      if (!isImage && !isVideo && !isPdf) { setError(`${f.name}: only images, video and PDFs can be attached.`); continue; }
+      const limit = isImage ? MAX_IMAGE_BYTES : isVideo ? MAX_VIDEO_BYTES : MAX_PDF_BYTES;
       if (f.size > limit) { setError(`${f.name} is ${Math.round(f.size / 1048576)} MB; the limit is ${limit / 1048576} MB.`); continue; }
       const data = await readBase64(f);
-      accepted.push({ id: crypto.randomUUID(), name: f.name, mime: isImage ? f.type || "image/png" : "application/pdf", size: f.size, data, preview: isImage ? URL.createObjectURL(f) : null });
+      const mime = isImage ? f.type || "image/png" : isPdf ? "application/pdf" : f.type || "video/mp4";
+      accepted.push({ id: crypto.randomUUID(), name: f.name, mime, size: f.size, data, preview: isImage || isVideo ? URL.createObjectURL(f) : null });
     }
     if (accepted.length) setFiles((cur) => [...cur, ...accepted]);
     ref.current?.focus();
@@ -219,12 +222,15 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
     setSending(true);
     setError(null);
     try {
-      await sendMessage(surface, content, files.map((f) => ({ name: f.name, data: f.data, mime: f.mime })), code);
+      await sendMessage(surface, content, files.map((f) => ({ name: f.name, data: f.data, mime: f.mime, preview: f.preview })), code);
       setText("");
       setToken(null);
       setResearchNext("off");
       setUiPreviewNote(false);
-      for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+      // Video previews are handed to the optimistic message (a data URL for a
+      // 100 MB clip is too heavy), so they stay alive; images render from their
+      // own bytes and their object URL can be released now.
+      for (const f of files) if (f.preview && !f.mime.startsWith("video/")) URL.revokeObjectURL(f.preview);
       setFiles([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -271,7 +277,7 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
             <div className="flex flex-wrap gap-2 px-4 pt-4">
               {files.map((f) => (
                 <span key={f.id} className="group flex h-12 items-center gap-2 rounded-xl border border-line bg-raised pl-1 pr-2 text-xs text-ink2">
-                  {f.preview ? <img src={f.preview} alt="" className="h-10 w-10 rounded-md object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-md bg-red/10 font-mono text-2xs text-red">PDF</span>}
+                  {f.preview ? (f.mime.startsWith("video/") ? <video src={f.preview} className="h-10 w-10 rounded-md object-cover" muted /> : <img src={f.preview} alt="" className="h-10 w-10 rounded-md object-cover" />) : <span className="flex h-10 w-10 items-center justify-center rounded-md bg-red/10 font-mono text-2xs text-red">PDF</span>}
                   <span className="max-w-[140px]">
                     <span className="block truncate text-ink">{f.name}</span>
                     <span className="block text-2xs text-ink4">{formatSize(f.size)}</span>
@@ -317,12 +323,12 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
           </div>
           )}
           <div className="flex flex-wrap items-center gap-1 px-3 pb-3 pt-1.5">
-            <Tooltip label="Attach images or PDFs" side="top">
+            <Tooltip label="Attach images, video or PDFs" side="top">
               <Button variant="ghost" size="md" icon onClick={() => picker.current?.click()} disabled={!connected || files.length >= MAX_FILES} aria-label="Attach">
                 <Paperclip size={17} />
               </Button>
             </Tooltip>
-            <input ref={picker} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={picker} type="file" accept="image/*,video/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
             {extra}
             {surface === "chat" && <UiExamples onPreview={(text) => {
               const s = convStore.getState();

@@ -92,7 +92,7 @@ describe('POST /api/chat/send with attachments', () => {
 
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toEqual({
-      error: 'attachment 1 is not a supported image (png, jpeg, webp, gif) or PDF',
+      error: 'attachment 1 is not a supported image, video (mp4, webm, mov) or PDF',
     });
   });
 

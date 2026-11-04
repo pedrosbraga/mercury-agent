@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { apiUrl, authHeaders } from "~/api/client";
@@ -6,9 +6,10 @@ import type { MessageAttachment } from "~/api/types";
 import { cx } from "~/lib/cx";
 
 /**
- * Files on a message. Images are thumbnails that open full size; PDFs are a
- * file chip. Stored files come from the runtime with the Bearer token (an
- * <img> cannot send one), so they are fetched once into blob URLs.
+ * Files on a message. Images are thumbnails that open full size; videos are
+ * inline players; PDFs are a file chip. Stored files come from the runtime
+ * with the Bearer token (an <img>/<video> cannot send one), so they are
+ * fetched once into blob URLs.
  */
 
 const blobs = new Map<string, Promise<string | null>>();
@@ -31,9 +32,15 @@ function useAuthedSrc(att: MessageAttachment): string | null {
   return src;
 }
 
+/** The runtime sends `kind: "video"`; a `video/*` mime is enough to be sure. */
+function isVideo(att: MessageAttachment): boolean {
+  return att.kind === "video" || !!att.mime?.startsWith("video/");
+}
+
 export function Attachments({ items, align = "start" }: { items: MessageAttachment[]; align?: "start" | "end" }) {
-  const images = items.filter((a) => a.kind === "image");
-  const docs = items.filter((a) => a.kind !== "image");
+  const images = items.filter((a) => a.kind === "image" && !isVideo(a));
+  const videos = items.filter(isVideo);
+  const docs = items.filter((a) => a.kind !== "image" && !isVideo(a));
   return (
     <div className={cx("flex flex-col gap-2", align === "end" && "items-end")}>
       {images.length > 0 && (
@@ -41,6 +48,7 @@ export function Attachments({ items, align = "start" }: { items: MessageAttachme
           {images.map((a, i) => <ImageThumb key={`${a.url ?? a.name}-${i}`} att={a} single={images.length === 1} />)}
         </div>
       )}
+      {videos.map((a, i) => <VideoPlayer key={`${a.url ?? a.name}-${i}`} att={a} />)}
       {docs.map((a, i) => (
         <span key={`${a.url ?? a.name}-${i}`} className="inline-flex max-w-[320px] items-center gap-2.5 rounded-lg border border-line bg-surface px-2.5 py-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-red/10 text-red"><FileText size={17} /></span>
@@ -76,5 +84,23 @@ function ImageThumb({ att, single }: { att: MessageAttachment; single: boolean }
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
+  );
+}
+
+/** A clip plays inline: native controls, the first frame as the poster. */
+function VideoPlayer({ att }: { att: MessageAttachment }) {
+  const src = useAuthedSrc(att);
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-raised" style={{ maxWidth: 420 }}>
+      {src ? (
+        <video src={src} controls preload="metadata" className="block max-h-[340px] w-full bg-black object-contain" />
+      ) : (
+        <span className="flex h-40 w-full items-center justify-center text-xs text-ink4">{att.url ? "Loading…" : att.name}</span>
+      )}
+      <span className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs text-ink3">
+        <Video size={14} className="shrink-0" />
+        <span className="truncate">{att.name}</span>
+      </span>
+    </div>
   );
 }

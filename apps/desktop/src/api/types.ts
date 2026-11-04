@@ -174,7 +174,8 @@ export interface ThoughtTrace {
 
 export interface MessageAttachment {
   name: string;
-  kind: "image" | "document" | string;
+  /** "image" renders a thumbnail, "video" a player; anything else is a file chip. */
+  kind: "image" | "video" | "document" | string;
   mime?: string;
   url?: string;
   src?: string;

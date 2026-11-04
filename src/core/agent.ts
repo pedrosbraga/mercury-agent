@@ -109,7 +109,11 @@ import { createTaskSurface, type DoneInput } from './task-surface.js';
 import { buildFileChangePreview } from '../utils/file-preview.js';
 import { whatsNewText } from '../utils/whats-new.js';
 import { handleBotsCommand as handleBotsCommandImpl } from './commands/bots-command.js';
-import { modelSeesImages, withAttachments } from './attachments.js';
+import { attachmentsOf, modelSeesImages, withAttachments } from './attachments.js';
+import { prepareVideoAttachments } from './video.js';
+import { currentSpeechEngine } from '../plugins/speech-choice.js';
+import { transcribeFile } from '../plugins/transcribe.js';
+import { findLocalWhisper, transcribeLocal } from './local-whisper.js';
 import { attachmentRefs } from '../web/api/uploads.js';
 import { AlertGate } from './alert-gate.js';
 import { setPluginImagesAllowed } from '../plugins/tool-bridge.js';
@@ -777,6 +781,31 @@ export class Agent {
 
   getBotManager(): import('../bots/bot-manager.js').BotManager | undefined {
     return this.botManager;
+  }
+
+  /** Video → frames + transcript, once per turn, best-effort (never blocks the turn). */
+  private async prepareVideo(msg: ChannelMessage): Promise<void> {
+    // Local whisper.cpp first (free, private, works offline); the configured
+    // speech service is the fallback, and with neither the clip stays frames-only.
+    const engine = currentSpeechEngine('listen');
+    const local = findLocalWhisper() !== null;
+    const transcribe =
+      local || engine
+        ? async (path: string): Promise<string> => {
+            if (local) {
+              try {
+                const text = await transcribeLocal(path);
+                if (text || !engine) return text;
+              } catch (err) {
+                if (!engine) throw err;
+              }
+            }
+            return engine ? transcribeFile(path, engine) : '';
+          }
+        : null;
+    await prepareVideoAttachments(msg, { transcribe }).catch((err) => {
+      logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'video preparation failed');
+    });
   }
 
   setSessionSyncEnabled(enabled: boolean): void {
@@ -3227,13 +3256,24 @@ export class Agent {
       this.capabilities.permissions.setCurrentChannelType(msg.channelType);
       this.capabilities.permissions.setCurrentSenderRole(msg.senderRole);
 
+      // A video attachment is transcoded to frames + transcript ONCE, here —
+      // before provider selection, so the vision fallback below sees the
+      // frames as images. Best-effort: a failure leaves the path in the
+      // transcript, as before.
+      await this.prepareVideo(msg);
+
       const providerContextId = msg.sessionId ?? (typeof msg.metadata?.sessionId === 'string' ? msg.metadata.sessionId : msg.channelId);
       const channelOverride = this.channelProviderOverrides.get(providerContextId);
-      const fallbackIterator = channelOverride
+      const baseFallback: BaseProvider[] = channelOverride
         ? [channelOverride.provider, ...this.providers.getFallbackIterator(channelOverride.providerName)]
           .filter((provider, index, list) => list.findIndex((item) => item.name === provider.name && item.getModel() === provider.getModel()) === index)
-          [Symbol.iterator]()
-        : this.providers.getFallbackIterator();
+        : [...this.providers.getFallbackIterator()];
+      // A photo or video must reach a model that can see it: when the message
+      // carries one, providers with vision lead the attempt chain. Every other
+      // message keeps the configured default untouched.
+      const fallbackIterator = attachmentsOf(msg).some((a) => a.kind === 'image' || a.kind === 'video')
+        ? [...baseFallback.filter((p) => modelSeesImages(p.name, p.getModel(), p.seesImages)), ...baseFallback.filter((p) => !modelSeesImages(p.name, p.getModel(), p.seesImages))][Symbol.iterator]()
+        : baseFallback[Symbol.iterator]();
       let result: any = null;
       let usedProvider: { name: string; model: string } | null = null;
       let lastError: any = null;

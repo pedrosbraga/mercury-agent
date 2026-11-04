@@ -408,7 +408,7 @@ describe('web bots API — files on a bot message', () => {
 
     expect(res.status).toBe(400);
     await expect(jreq(res)).resolves.toEqual({
-      error: 'attachment 1 is not a supported image (png, jpeg, webp, gif) or PDF',
+      error: 'attachment 1 is not a supported image, video (mp4, webm, mov) or PDF',
     });
     expect(existsSync(join(root, 'uploads'))).toBe(before);
   });

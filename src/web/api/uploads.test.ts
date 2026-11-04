@@ -79,7 +79,7 @@ describe('storeInlineAttachments', () => {
 
   it('rejects bytes it does not recognise', () => {
     const result = storeInlineAttachments([{ name: 'notes.txt', data: Buffer.from('hello').toString('base64') }]);
-    expect(result).toEqual({ ok: false, error: 'attachment 1 is not a supported image (png, jpeg, webp, gif) or PDF' });
+    expect(result).toEqual({ ok: false, error: 'attachment 1 is not a supported image, video (mp4, webm, mov) or PDF' });
   });
 
   it('rejects an image over the model limit', () => {

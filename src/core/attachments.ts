@@ -7,6 +7,7 @@
  * Only models that can take them get them: a text-only model would reject
  * the whole request, so it gets the path and a note instead.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import type { ChannelMessage } from '../types/channel.js';
@@ -14,6 +15,7 @@ import type { ChannelMessage } from '../types/channel.js';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const MAX_FILES = 4;
+const MAX_IMAGE_EDGE = 2048;
 
 interface Attachment {
   kind: string;
@@ -37,7 +39,7 @@ export function modelSeesImages(provider: string, model: string, declared?: bool
   if (declared !== undefined) return declared;
   const m = model.toLowerCase();
   if (provider === 'deepseek') return false;
-  if (/gpt-4o|gpt-4\.1|gpt-5|chatgpt-4o|\bo[134](-|$)|claude|gemini|pixtral|llava|qwen.*vl|vision|grok-(2-vision|4)|llama-?4|mistral-(medium|small)-3|gemma-?3/.test(m)) return true;
+  if (/gpt-4o|gpt-4\.1|gpt-[56]|chatgpt-4o|\bo[134](-|$)|claude|gemini|pixtral|llava|qwen.*vl|vision|grok-(2-vision|4)|llama-?4|mistral-(medium|small)-3|gemma-?3/.test(m)) return true;
   return false;
 }
 
@@ -60,6 +62,47 @@ export function attachmentsOf(msg: ChannelMessage): Attachment[] {
 
 function isPdf(a: Attachment): boolean {
   return a.mime === 'application/pdf' || extname(a.path).toLowerCase() === '.pdf';
+}
+
+/**
+ * Downscale an image whose long edge exceeds `maxEdge` so a vision model's
+ * patch limit isn't hit: oversized photos otherwise fail with a 400 and the
+ * turn falls back to a text-only model. Small images pass through untouched,
+ * and any failure returns null so the caller uses the original bytes.
+ */
+function downscaleImage(a: Attachment, maxEdge = MAX_IMAGE_EDGE): { data: Buffer; mediaType: string } | null {
+  const ext = extname(a.path).toLowerCase();
+  const isJpeg = ext === '.jpg' || ext === '.jpeg';
+  const isPng = ext === '.png';
+  const isWebp = ext === '.webp';
+  if (!isJpeg && !isPng && !isWebp) return null;
+
+  let width = 0;
+  let height = 0;
+  try {
+    const dims = execFileSync(
+      'ffprobe',
+      ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', a.path],
+      { maxBuffer: 64 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
+    ).toString().trim();
+    const [w, h] = dims.split(',').map((n) => Number.parseInt(n, 10));
+    if (Number.isFinite(w) && Number.isFinite(h)) { width = w; height = h; }
+  } catch {
+    return null;
+  }
+  if (!width || !height || Math.max(width, height) <= maxEdge) return null;
+
+  const mediaType = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg';
+  const codec = isPng ? 'png' : isWebp ? 'libwebp' : 'mjpeg';
+  const args = ['-i', a.path, '-vf', `scale=${maxEdge}:${maxEdge}:force_original_aspect_ratio=decrease`, '-frames:v', '1', '-c:v', codec];
+  if (isJpeg) args.push('-q:v', '2');
+  args.push('-f', 'image2pipe', 'pipe:1');
+  try {
+    const data = execFileSync('ffmpeg', args, { maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    return data.length > 0 ? { data, mediaType } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -86,7 +129,11 @@ export function withAttachments<T extends { role: string; content: unknown }>(
       const mediaType = a.mime?.startsWith('image/') ? a.mime : IMAGE_MIME[extname(a.path).toLowerCase()] ?? 'image/jpeg';
       if (!modelSeesImages(provider, model, declaredVision)) notes.push(`The current model (${model}) can't view images; say so, and offer to describe it with a vision model if one is configured.`);
       else if (size > MAX_IMAGE_BYTES) notes.push(`An image is too large to view (${Math.round(size / 1048576)} MB).`);
-      else parts.push({ type: 'image', image: readFileSync(a.path), mediaType });
+      else {
+        const down = downscaleImage(a);
+        if (down) parts.push({ type: 'image', image: down.data, mediaType: down.mediaType });
+        else parts.push({ type: 'image', image: readFileSync(a.path), mediaType });
+      }
     } else if (isPdf(a)) {
       if (modelReadsPdf(provider, model) && size <= MAX_PDF_BYTES) parts.push({ type: 'file', data: readFileSync(a.path), mediaType: 'application/pdf', filename: a.name ?? basename(a.path) });
     }

@@ -45,8 +45,8 @@ export interface ChannelMessage {
  * (`src/core/attachments.ts`); other kinds stay a path in the transcript.
  */
 export interface ChannelAttachment {
-  /** `image` and `document` are the kinds the runtime can hand to a model. */
-  kind: 'image' | 'document';
+  /** `image` and `document` are the kinds the runtime can hand to a model directly; `video` is transcoded to frames + transcript first. */
+  kind: 'image' | 'document' | 'video';
   path: string;
   mime?: string;
   name?: string;

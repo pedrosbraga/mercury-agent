@@ -391,7 +391,7 @@ export interface CodeTurn {
   folder: string | null;
 }
 
-export async function sendMessage(surface: Surface, content: string, attachments: Array<{ name: string; data: string; mime?: string }> = [], code?: CodeTurn): Promise<void> {
+export async function sendMessage(surface: Surface, content: string, attachments: Array<{ name: string; data: string; mime?: string; preview?: string | null }> = [], code?: CodeTurn): Promise<void> {
   const store = conversations[surface];
   let id = store.getState().activeId;
   if (!id) {
@@ -408,7 +408,17 @@ export async function sendMessage(surface: Surface, content: string, attachments
     content: shown,
     timestamp: new Date().toISOString(),
     ...(attachments.length
-      ? { attachments: attachments.map((a) => ({ name: a.name, kind: a.mime?.startsWith("image/") ? "image" : "document", mime: a.mime, src: a.mime?.startsWith("image/") ? `data:${a.mime};base64,${a.data}` : undefined })) }
+      ? { attachments: attachments.map((a) => {
+          const kind = a.mime?.startsWith("image/") ? "image" : a.mime?.startsWith("video/") ? "video" : "document";
+          return {
+            name: a.name,
+            kind,
+            mime: a.mime,
+            // Images render straight from their bytes (small); video needs the
+            // composer's object URL — a base64 data URL for a 100 MB clip is too heavy.
+            src: kind === "image" ? `data:${a.mime};base64,${a.data}` : kind === "video" ? (a.preview ?? undefined) : undefined,
+          };
+        }) }
       : {}),
   };
   store.getState().addMessage(optimistic);
