@@ -35,6 +35,10 @@ export interface ConversationState {
   /** Text to put in the box (an undone message); the composer takes it once. */
   draft: string | null;
   setDraft(draft: string | null): void;
+  /** UI previews are transient, scoped to this exact visit to a chat. */
+  uiEpoch: number;
+  uiDraft: { threadId: string | null; epoch: number; text: string } | null;
+  previewUiDraft(threadId: string | null, epoch: number, text: string): boolean;
   /** The conversation's plan checklist (update_plan), if Mercury made one. */
   plan: { steps: Array<{ label: string; status: "pending" | "active" | "done" }>; updatedAt: number } | null;
   setPlan(plan: ConversationState["plan"]): void;
@@ -67,7 +71,7 @@ export interface ConversationState {
 export type ConversationStore = UseBoundStore<StoreApi<ConversationState>>;
 
 function makeConversation(surface: Surface): ConversationStore {
-  return create<ConversationState>((set) => ({
+  return create<ConversationState>((set, get) => ({
     surface,
     activeId: null,
     messages: [],
@@ -83,6 +87,14 @@ function makeConversation(surface: Surface): ConversationStore {
     setStopping: (stopping) => set({ stopping }),
     draft: null,
     setDraft: (draft) => set({ draft }),
+    uiEpoch: 0,
+    uiDraft: null,
+    previewUiDraft: (threadId, epoch, text) => {
+      const s = get();
+      if (s.surface !== "chat" || s.activeId !== threadId || s.uiEpoch !== epoch || s.loading) return false;
+      set({ uiDraft: { threadId, epoch, text } });
+      return true;
+    },
     plan: null,
     setPlan: (plan) => set({ plan }),
     research: null,
@@ -93,7 +105,7 @@ function makeConversation(surface: Surface): ConversationStore {
     setNotice: (notice) => set({ notice }),
     setLive: (update) => set((s) => ({ live: update(s.live ?? { reasoning: "", steps: [], startedAt: Date.now() }) })),
     clearLive: () => set({ live: null }),
-    setActive: (activeId) => set({ activeId, prompts: [], step: null, agent: "idle", live: null, stopping: false, plan: null, research: null, researchPlan: null, notice: null }),
+    setActive: (activeId) => set((s) => ({ activeId, uiEpoch: s.uiEpoch + 1, uiDraft: null, prompts: [], step: null, agent: "idle", live: null, stopping: false, plan: null, research: null, researchPlan: null, notice: null })),
     setMessages: (messages) => set({ messages }),
     addMessage: (message) => set((s) => ({ messages: [...s.messages, message] })),
     appendStreaming: (text) => set((s) => ({ streaming: s.streaming + text })),

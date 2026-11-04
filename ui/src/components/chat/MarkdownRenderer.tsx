@@ -1,4 +1,6 @@
+import { Children, createContext, useContext, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import { MercuryUI, isClosedUiFence, type PreviewDraft } from "./InteractiveUI";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock";
 import { cn } from "@/lib/utils";
@@ -6,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  uiPreview?: PreviewDraft;
 }
 
 const components: Components = {
@@ -154,12 +157,38 @@ const components: Components = {
   },
 };
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+function plainText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(plainText).join("");
+  return "";
+}
+
+const MarkdownContext = createContext<{ content: string; uiPreview?: PreviewDraft }>({ content: "" });
+// Stable identities: following streamed prose must not reset inputs or local tabs.
+const interactiveComponents: Components = {
+  ...components,
+  pre: function MarkdownPre({ children, node }) {
+    const { content, uiPreview } = useContext(MarkdownContext);
+    const child = Children.only(children) as ReactElement<{ className?: string; children?: ReactNode }>;
+    if (uiPreview && child.props.className === "language-mercury-ui") {
+      const start = node?.position?.start.offset, end = node?.position?.end.offset;
+      if (start !== undefined && end !== undefined && isClosedUiFence(content.slice(start, end))) {
+        return <MercuryUI raw={plainText(child.props.children).replace(/\n$/, "")} onPreview={uiPreview} />;
+      }
+      return <div><p role="note">Interface incompleta — aguardando o fechamento do bloco.</p><pre><code>{plainText(child.props.children)}</code></pre></div>;
+    }
+    return <>{children}</>;
+  },
+};
+
+export function MarkdownRenderer({ content, className, uiPreview }: MarkdownRendererProps) {
   return (
-    <div className={cn("text-sm", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
-      </ReactMarkdown>
-    </div>
+    <MarkdownContext.Provider value={{ content, uiPreview }}>
+      <div className={cn("text-sm", className)}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={interactiveComponents}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    </MarkdownContext.Provider>
   );
 }

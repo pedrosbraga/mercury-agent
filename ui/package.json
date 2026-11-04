@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@json-render/core": "0.21.4",
+    "@json-render/react": "0.21.4",
+    "zod": "^4.6.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.6.1",
@@ -42,6 +45,7 @@
     "lucide-react": "^0.511.0"
   },
   "overrides": {
+    "@json-render/react": { "react": "$react" },
     "path-scurry": {
       "lru-cache": "^10.4.3"
     }

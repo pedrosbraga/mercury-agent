@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mercury UI — Demo interativa</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: 28 28 32;
+        --ink-3: 130 130 140;
+        --surface: 255 255 255;
+        --accent: 79 110 245;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --ink: 232 232 238;
+          --ink-3: 150 150 160;
+          --surface: 28 28 34;
+          --accent: 110 138 255;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: rgb(var(--surface));
+        color: rgb(var(--ink));
+      }
+      .demo-wrap {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 4rem;
+      }
+      .demo-wrap h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+      .demo-wrap > p.sub { color: rgb(var(--ink-3)); margin: 0 0 1.5rem; font-size: .95rem; }
+      .draft-box {
+        margin-top: 2rem;
+        border: 1px dashed rgb(var(--ink) / .25);
+        border-radius: 12px;
+        padding: 1rem;
+        background: rgb(var(--ink) / .03);
+      }
+      .draft-box h2 { font-size: .9rem; margin: 0 0 .5rem; text-transform: uppercase; letter-spacing: .04em; color: rgb(var(--ink-3)); }
+      .draft-box pre {
+        margin: 0; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .85rem;
+      }
+      .draft-box .empty { color: rgb(var(--ink-3)); font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

@@ -14,7 +14,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@mercury-ui/*": ["../apps/desktop/src/components/mercury-ui/*"]
     }
   },
   "include": ["src"]

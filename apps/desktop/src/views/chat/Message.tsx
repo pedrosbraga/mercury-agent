@@ -5,6 +5,7 @@ import { memo, useState } from "react";
 import type { ChatMessage, ThoughtTrace } from "~/api/types";
 import { Mark } from "~/components/Logo";
 import { Markdown } from "~/components/Markdown";
+import type { PreviewDraft } from "~/components/mercury-ui/MercuryUI";
 import { StreamCaret } from "~/components/indicators/Thinking";
 import { ActionResult } from "~/components/indicators/Activity";
 import { Attachments } from "~/components/Attachments";
@@ -26,7 +27,7 @@ import { ReadAloudButton, ReadAloudNotice, useReadingThis } from "~/components/r
  *  - tool-call     a collapsed "used N tools" row; open it for each call
  *  - system        a muted note
  */
-export const Message = memo(function Message({ message, undoable = false }: { message: ChatMessage; undoable?: boolean }) {
+export const Message = memo(function Message({ message, undoable = false, uiPreview }: { message: ChatMessage; undoable?: boolean; uiPreview?: PreviewDraft }) {
   const you = useDisplayName();
   if (message.role === "user") {
     const files = message.attachments ?? [];
@@ -71,7 +72,7 @@ export const Message = memo(function Message({ message, undoable = false }: { me
             {message.steps.map((s, i) => <ActionResult key={i} tool={s.tool} status={s.status} detail={s.result} />)}
           </div>
         )}
-        {body && <Markdown text={body} />}
+        {body && <Markdown text={body} uiPreview={message.role === "assistant" ? uiPreview : undefined} />}
         {stopped && <StoppedMarker partial={!!body} />}
         {message.research
           ? <ResearchReport run={message.research} content={body} />
@@ -190,7 +191,7 @@ function ToolActivity({ content }: { content: string }) {
 }
 
 /** The answer being written, with its thought process above it (open while it runs). */
-export function StreamingMessage({ text, live, stopping = false }: { text: string; live: ThoughtTrace | null; stopping?: boolean }) {
+export function StreamingMessage({ text, live, stopping = false, uiPreview }: { text: string; live: ThoughtTrace | null; stopping?: boolean; uiPreview?: PreviewDraft }) {
   return (
     <div className="flex gap-4">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden="true"><Mark size={22} /></span>
@@ -198,7 +199,7 @@ export function StreamingMessage({ text, live, stopping = false }: { text: strin
         <Speaker who="mercury" />
         {live && <ThoughtProcess trace={live} live={!text} stopping={stopping} />}
         {stopping && text && <div className="mb-2 text-sm text-ink3">Stopping…</div>}
-        {text && <><Markdown text={text} streaming /><StreamCaret /></>}
+        {text && <><Markdown text={text} streaming uiPreview={uiPreview} /><StreamCaret /></>}
       </div>
     </div>
   );

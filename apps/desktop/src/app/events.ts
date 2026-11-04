@@ -335,9 +335,11 @@ export async function refreshBots(): Promise<void> {
 export async function openThread(surface: Surface, id: string | null): Promise<void> {
   const store = conversations[surface];
   store.getState().setActive(id);
+  const epoch = store.getState().uiEpoch;
   store.getState().clearStreaming();
+  store.getState().setMessages([]);
   if (!id) {
-    store.getState().setMessages([]);
+    store.getState().setLoading(false);
     return;
   }
   store.getState().setLoading(true);
@@ -376,11 +378,11 @@ export async function openThread(surface: Surface, id: string | null): Promise<v
     .catch(() => { /* older Mercury: no plans */ });
   try {
     const thread = await api.chat.thread(id);
-    store.getState().setMessages(thread.messages ?? []);
+    if (store.getState().uiEpoch === epoch) store.getState().setMessages(thread.messages ?? []);
   } catch {
-    store.getState().setMessages([]);
+    if (store.getState().uiEpoch === epoch) store.getState().setMessages([]);
   } finally {
-    store.getState().setLoading(false);
+    if (store.getState().uiEpoch === epoch) store.getState().setLoading(false);
   }
 }
 
@@ -412,7 +414,10 @@ export async function sendMessage(surface: Surface, content: string, attachments
   store.getState().addMessage(optimistic);
   store.getState().setAgent("thinking");
   store.getState().setLive(() => ({ reasoning: "", steps: [], startedAt: Date.now() }));
-  await api.chat.send(content, id, attachments.map(({ name, data }) => ({ name, data })), code ? { programming: code.mode, cwd: code.folder ?? undefined } : undefined);
+  // The Chat surface renders the constrained, non-executable interactive UI
+  // (mercury-ui-v1); Code stays text-only. Declared per-send, exactly like the
+  // web dashboard, so old runtimes just ignore the extra field.
+  await api.chat.send(content, id, attachments.map(({ name, data }) => ({ name, data })), code ? { programming: code.mode, cwd: code.folder ?? undefined } : undefined, surface === "chat");
   void refreshThreads();
 }
 

@@ -1,5 +1,5 @@
 import { ArrowDown } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { PlanCard } from "./PlanCard";
 import { jumpLabel, useFollowBottom } from "./follow";
 import { cx } from "~/lib/cx";
@@ -28,6 +28,9 @@ export function Conversation({ header, empty, composer }: { header: ReactNode; e
   const streaming = useConversation((s) => s.streaming);
   const loading = useConversation((s) => s.loading);
   const activeId = useConversation((s) => s.activeId);
+  const uiEpoch = useConversation((s) => s.uiEpoch);
+  const previewUi = useCallback((text: string) => store.getState().previewUiDraft(activeId, uiEpoch, text), [store, activeId, uiEpoch]);
+  const uiPreview = composer.surface === "chat" && !loading ? previewUi : undefined;
   const agent = useConversation((s) => s.agent);
   const step = useConversation((s) => s.step);
   const prompts = useConversation((s) => s.prompts);
@@ -105,9 +108,9 @@ export function Conversation({ header, empty, composer }: { header: ReactNode; e
                 {hiddenCount} earlier message{hiddenCount === 1 ? "" : "s"}
               </button>
             )}
-            {shown.map((m) => <Message key={m.id} message={m} undoable={m.id === lastYours} />)}
+            {shown.map((m) => <Message key={`${uiEpoch}:${m.id}`} message={m} undoable={m.id === lastYours} uiPreview={uiPreview} />)}
             {(streaming || (live && (agent === "thinking" || agent === "working" || agent === "streaming" || agent === "needs-you"))) && (
-              <StreamingMessage text={streaming} live={live} stopping={stopping} />
+              <StreamingMessage key={uiEpoch} text={streaming} live={live} stopping={stopping} uiPreview={uiPreview} />
             )}
             {waiting && !streaming ? (
               <WaitingNotice threadId={activeId} waiting={waiting} />
@@ -146,7 +149,7 @@ export function Conversation({ header, empty, composer }: { header: ReactNode; e
       <ResearchBar />
       {/* While research runs, its bar shows the questions (and Details the checklist): one progress display, not two. */}
       {!researching && <PlanCard surface={composer.surface} />}
-      <Composer {...composer} />
+      <Composer key={composer.surface === "chat" ? uiEpoch : undefined} {...composer} />
     </section>
   );
 }

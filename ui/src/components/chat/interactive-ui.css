@@ -1,0 +1,3 @@
+/* Adapt only the shared widgets to the dashboard's light/dark theme. */
+.mercury-ui { --ink: 18 24 28; --ink-3: 90 104 112; --surface: 255 255 255; --accent: 0 142 171; min-width: 0; }
+.dark .mercury-ui { --ink: 234 238 240; --ink-3: 145 162 171; --surface: 17 23 29; --accent: 0 212 255; }

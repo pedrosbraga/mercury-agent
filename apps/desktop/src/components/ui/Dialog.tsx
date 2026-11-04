@@ -9,7 +9,7 @@ export function Dialog({ open, onOpenChange, title, description, children, width
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/40 animate-fade-in" />
         <RadixDialog.Content
-          style={{ width }}
+          style={{ width, maxWidth: "calc(100vw - 2rem)" }}
           className={cx("fixed left-1/2 top-1/2 z-50 max-h-[85vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface p-5 shadow-2xl animate-fade-in")}
         >
           <div className="mb-4 flex items-start justify-between gap-4">

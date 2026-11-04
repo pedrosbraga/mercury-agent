@@ -1,13 +1,15 @@
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import type { PreviewDraft } from "./InteractiveUI";
 import { ToolCallCard } from "./ToolCallCard";
 import { useThemeStore } from "@/stores/theme";
 
 interface StreamingMessageProps {
   text: string;
+  uiPreview?: PreviewDraft;
   steps?: { tool: string; status: string }[];
 }
 
-export function StreamingMessage({ text, steps }: StreamingMessageProps) {
+export function StreamingMessage({ text, steps, uiPreview }: StreamingMessageProps) {
   const isThinking = !text;
   const resolved = useThemeStore((s) => s.resolved);
 
@@ -44,7 +46,7 @@ export function StreamingMessage({ text, steps }: StreamingMessageProps) {
             </div>
           ) : (
             <div className="inline">
-              <MarkdownRenderer content={text} />
+              <MarkdownRenderer content={text} uiPreview={uiPreview} />
               <span className="ml-0.5 inline-block h-4 w-[3px] translate-y-[2px] rounded-sm bg-mercury-500 animate-cursor-blink" />
             </div>
           )}

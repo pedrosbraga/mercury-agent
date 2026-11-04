@@ -194,8 +194,8 @@ export const providers = {
 
 // ── Chat ──
 export const chat = {
-  send: (content: string, threadId?: string) =>
-    post<{ sent: boolean; sessionId: string }>("/api/chat/send", { content, sessionId: threadId }),
+  send: (content: string, threadId?: string, interactiveUi = false) =>
+    post<{ sent: boolean; sessionId: string }>("/api/chat/send", { content, sessionId: threadId, ...(interactiveUi ? { interactiveUi: "mercury-ui-v1" } : {}) }),
   settings: {
     get: () => get<ChatSettings>("/api/chat/settings"),
     update: (data: Partial<ChatSettings>) =>

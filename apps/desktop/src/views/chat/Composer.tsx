@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/Button";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "~/components/ui/Menu";
 import { Tooltip } from "~/components/ui/Tooltip";
 import { DictationNotice, MicButton, RecordingBar, joinText, useDictation } from "~/components/dictation/Dictation";
+import { UiExamples } from "~/components/mercury-ui/Examples";
 
 /**
  * One box. Enter sends, Shift+Enter breaks a line, Esc clears. Photos and
@@ -125,6 +126,21 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
     return () => window.removeEventListener("keydown", onKey, true);
   }, [recording]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const uiDraft = useConversation((s) => s.uiDraft);
+  const [uiPreviewNote, setUiPreviewNote] = useState(false);
+  useEffect(() => {
+    if (!uiDraft || surface !== "chat") return;
+    const s = convStore.getState();
+    if (s.uiDraft !== uiDraft || s.activeId !== uiDraft.threadId || s.uiEpoch !== uiDraft.epoch || s.loading) return;
+    // Preserve existing text, but never inherit command/research state for a preview.
+    setText((current) => [current, uiDraft.text].filter(Boolean).join("\n\n"));
+    setToken(null);
+    setResearchNext("off");
+    setUiPreviewNote(true);
+    convStore.setState({ uiDraft: null });
+    requestAnimationFrame(() => ref.current?.focus());
+  }, [uiDraft, surface, convStore]);
+
   // An undone message comes back here, in place of what was typed.
   const undone = useConversation((s) => s.draft);
   useEffect(() => {
@@ -207,6 +223,7 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
       setText("");
       setToken(null);
       setResearchNext("off");
+      setUiPreviewNote(false);
       for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
       setFiles([]);
     } catch (err) {
@@ -236,6 +253,7 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
       <div className="mx-auto w-full max-w-[780px]">
         {error && <div className="mb-2 px-1 text-sm text-red">{error}</div>}
         <DictationNotice d={dictation} className="mb-2" />
+        {uiPreviewNote && <p role="status" className="mb-2 px-1 text-xs text-ink3">UI preview added to your draft. Nothing was sent — review and press Send yourself.</p>}
         <div
           onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
           onDragLeave={() => setDragging(false)}
@@ -306,6 +324,10 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
             </Tooltip>
             <input ref={picker} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ""; }} />
             {extra}
+            {surface === "chat" && <UiExamples onPreview={(text) => {
+              const s = convStore.getState();
+              return s.previewUiDraft(s.activeId, s.uiEpoch, text);
+            }} />}
             {modeLabel && (
               <Tooltip label="Switch mode" shortcut="⇧⇥" side="top">
                 <button onClick={onCycleMode} className="flex h-8 items-center gap-1.5 rounded-md px-2 font-mono text-sm text-cyan hover:bg-ink/[0.06]" aria-label="Switch mode">

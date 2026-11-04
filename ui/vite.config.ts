@@ -52,8 +52,11 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    // Reuse the audited UI catalog/renderer; never bundle a second React instance.
+    dedupe: ["react", "react-dom", "zod", "@json-render/core", "@json-render/react"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@mercury-ui": path.resolve(__dirname, "../apps/desktop/src/components/mercury-ui"),
     },
   },
   server: {

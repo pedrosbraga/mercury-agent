@@ -5,14 +5,16 @@ import type { ChatMessage } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useThemeStore } from "@/stores/theme";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import type { PreviewDraft } from "./InteractiveUI";
 import { ToolCallCard } from "./ToolCallCard";
 
 interface MessageBubbleProps {
   message: ChatMessage;
   isLast?: boolean;
+  uiPreview?: PreviewDraft;
 }
 
-export function MessageBubble({ message, isLast }: MessageBubbleProps) {
+export function MessageBubble({ message, isLast, uiPreview }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
   const resolved = useThemeStore((s) => s.resolved);
@@ -84,7 +86,7 @@ export function MessageBubble({ message, isLast }: MessageBubbleProps) {
               {message.content}
             </p>
           ) : (
-            <MarkdownRenderer content={message.content} />
+            <MarkdownRenderer content={message.content} uiPreview={message.role === "assistant" ? uiPreview : undefined} />
           )}
 
           {/* Hover actions */}

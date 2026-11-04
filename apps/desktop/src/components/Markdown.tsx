@@ -1,9 +1,11 @@
-import { Children, isValidElement, memo, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Children, createContext, isValidElement, memo, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AlertTriangle, Check, CircleAlert, Copy, Info, Lightbulb, OctagonAlert, WrapText } from "lucide-react";
 import { cx } from "~/lib/cx";
 import { highlight, languageOf } from "./highlight";
+import { MercuryUI, type PreviewDraft } from "./mercury-ui/MercuryUI";
+import { isClosedUiFence } from "./mercury-ui/spec";
 
 /**
  * The agent's answers, rendered for reading:
@@ -13,10 +15,34 @@ import { highlight, languageOf } from "./highlight";
  *  - GitHub alerts (> [!NOTE] / TIP / IMPORTANT / WARNING / CAUTION) as callouts;
  *  - tables in a scroll box; links open outside; images rounded.
  */
-export const Markdown = memo(function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const components: Components = {
+/** Interactive UI is opt-in exclusively at the assistant chat call sites. */
+export const Markdown = memo(function Markdown({ text, streaming = false, uiPreview }: { text: string; streaming?: boolean; uiPreview?: PreviewDraft }) {
+  return (
+    <MarkdownContext.Provider value={{ text, streaming, uiPreview }}>
+      <div className="prose" data-selectable>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{text}</ReactMarkdown>
+      </div>
+    </MarkdownContext.Provider>
+  );
+});
+
+const MarkdownContext = createContext<{ text: string; streaming: boolean; uiPreview?: PreviewDraft }>({ text: "", streaming: false });
+
+// Stable component identities preserve form/tab state as following prose streams in.
+const components: Components = {
     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
-    pre: ({ children }) => <CodeBlock streaming={streaming}>{children}</CodeBlock>,
+    pre: function MarkdownPre({ children, node }) {
+      const { text, streaming, uiPreview } = useContext(MarkdownContext);
+      const child = Children.only(children) as ReactElement<{ className?: string; children?: ReactNode }>;
+      const isUi = child.props.className === "language-mercury-ui";
+      if (uiPreview && isUi) {
+        const start = node?.position?.start.offset, end = node?.position?.end.offset;
+        const closed = start !== undefined && end !== undefined && isClosedUiFence(text.slice(start, end));
+        if (closed) return <MercuryUI raw={extractText(child.props.children).replace(/\n$/, "")} onPreview={uiPreview} />;
+        return <div><p className="text-xs text-ink3" role="note">Interactive UI is incomplete; waiting for a closing fence. Showing inert code.</p><CodeBlock streaming={streaming}>{children}</CodeBlock></div>;
+      }
+      return <CodeBlock streaming={streaming}>{children}</CodeBlock>;
+    },
     code: ({ className, children, ...rest }) => <code className={className} {...rest}>{children}</code>,
     table: ({ children }) => <div className="md-table"><table>{children}</table></div>,
     blockquote: ({ children }) => <Blockquote>{children}</Blockquote>,
@@ -37,13 +63,7 @@ export const Markdown = memo(function Markdown({ text, streaming = false }: { te
     },
     ul: ({ className, children }) => <ul className={cx(typeof className === "string" && className.includes("contains-task-list") && "md-task-list")}>{children}</ul>,
     input: () => null,
-  };
-  return (
-    <div className="prose" data-selectable>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{text}</ReactMarkdown>
-    </div>
-  );
-});
+};
 
 function CodeBlock({ children, streaming }: { children: ReactNode; streaming: boolean }) {
   const child = Children.only(children) as ReactElement<{ className?: string; children?: ReactNode }>;

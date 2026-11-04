@@ -29,6 +29,7 @@ import { ModelSwitcher } from "@/components/chat/ModelSwitcher";
 import { CodeModeToggle } from "@/components/chat/CodeModeToggle";
 import { MessageBubble as MessageBubbleComponent } from "@/components/chat/MessageBubble";
 import { StreamingMessage } from "@/components/chat/StreamingMessage";
+import { UiExamples, type PreviewDraft } from "@/components/chat/InteractiveUI";
 
 // ─── Hooks ───────────────────────────────────────────────────
 
@@ -288,14 +289,29 @@ function SlashCommandMenu({
 function ChatInput({
   onSend,
   disabled,
+  onPreview,
 }: {
   onSend: (text: string) => void;
   disabled: boolean;
+  onPreview: PreviewDraft;
 }) {
   const [text, setText] = useState("");
   const [showSlash, setShowSlash] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const uiDraft = useChatStore((s) => s.uiDraft);
+  const [previewNote, setPreviewNote] = useState(false);
+  useEffect(() => {
+    if (!uiDraft) return;
+    const s = useChatStore.getState();
+    if (s.uiDraft !== uiDraft || s.activeThreadId !== uiDraft.threadId || s.uiEpoch !== uiDraft.epoch || s.loadingThread) return;
+    setText((current) => [current, uiDraft.text].filter(Boolean).join("\n\n"));
+    setShowSlash(false);
+    setPreviewNote(true);
+    useChatStore.setState({ uiDraft: null });
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [uiDraft]);
 
   // Compute filtered commands for index bounds
   const slashFilter = showSlash ? text.split("\n")[0] : "";
@@ -309,6 +325,7 @@ function ChatInput({
     setShowSlash(false);
     onSend(trimmed);
     setText("");
+    setPreviewNote(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -380,6 +397,10 @@ function ChatInput({
 
   return (
     <div className="border-t border-border bg-background/80 backdrop-blur-xl px-4 py-3">
+      <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
+        <UiExamples onPreview={onPreview} />
+        {previewNote && <p role="status" className="text-xs text-muted-foreground">Rascunho preparado. Nada foi enviado — revise e pressione Enviar.</p>}
+      </div>
       <div className="mx-auto flex max-w-3xl items-end gap-2">
         <div className="relative flex-1">
           <AnimatePresence>
@@ -444,6 +465,10 @@ export function ChatPage() {
   const isStreaming = useChatStore((s) => s.isStreaming);
   const waiting = useChatStore((s) => s.waiting);
   const activeThreadId = useChatStore((s) => s.activeThreadId);
+  const uiEpoch = useChatStore((s) => s.uiEpoch);
+  const loadingThread = useChatStore((s) => s.loadingThread);
+  const previewUi = useCallback((text: string) => useChatStore.getState().previewUiDraft(activeThreadId, uiEpoch, text), [activeThreadId, uiEpoch]);
+  const uiPreview = loadingThread ? undefined : previewUi;
   const provider = useChatStore((s) => s.provider);
   const model = useChatStore((s) => s.model);
   const totalSteps = useChatStore((s) => s.totalSteps);
@@ -480,22 +505,24 @@ export function ChatPage() {
   useEffect(() => {
     if (!activeThreadId) {
       clearMessages();
+      useChatStore.setState({ loadingThread: false });
       return;
     }
+    let cancelled = false;
+    useChatStore.setState({ loadingThread: true });
     (async () => {
       try {
         const thread = await api.chat.threads.get(activeThreadId);
-        clearMessages();
-        if (thread.messages && thread.messages.length > 0) {
-          thread.messages.forEach((m) => addMessage(m));
-        }
+        if (!cancelled && useChatStore.getState().uiEpoch === uiEpoch) useChatStore.setState({ messages: thread.messages ?? [] });
       } catch {
-        // Thread doesn't exist yet (new thread) — just clear
-        clearMessages();
+        // New threads do not exist on the server yet.
+      } finally {
+        if (!cancelled && useChatStore.getState().uiEpoch === uiEpoch) useChatStore.setState({ loadingThread: false });
       }
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeThreadId]);
+  }, [activeThreadId, uiEpoch]);
 
   async function handleSend(content: string) {
     // Ensure we have a thread ID — create one if needed
@@ -518,7 +545,7 @@ export function ChatPage() {
     setWaiting(true);
 
     try {
-      const res = await api.chat.send(content, threadId);
+      const res = await api.chat.send(content, threadId, true);
       // A client-made "web:..." id is rebound to a server session id. Follow
       // it, or the SSE stream stays on the old id and never receives this
       // turn's replies or permission prompts.
@@ -742,10 +769,10 @@ export function ChatPage() {
                         // not a permission prompt, render as regular message
                       }
                     }
-                    return <MessageBubbleComponent key={msg.id} message={msg} />;
+                    return <MessageBubbleComponent key={`${uiEpoch}:${msg.id}`} message={msg} uiPreview={uiPreview} />;
                   })}
                   {isStreaming && streamingText && (
-                    <StreamingMessage text={streamingText} />
+                    <StreamingMessage key={uiEpoch} text={streamingText} uiPreview={uiPreview} />
                   )}
                   {waiting && !isStreaming && <WaitingIndicator />}
                 </>
@@ -796,7 +823,7 @@ export function ChatPage() {
         )}
 
         {/* Chat input */}
-        <ChatInput onSend={handleSend} disabled={isBusy} />
+        <ChatInput key={uiEpoch} onSend={handleSend} disabled={isBusy || loadingThread} onPreview={previewUi} />
       </div>
 
       {/* ── Workspace Panel ── */}

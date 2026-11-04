@@ -11,6 +11,10 @@ export interface ChatState {
   // Threads
   threads: ChatThread[];
   activeThreadId: string | null;
+  uiEpoch: number;
+  loadingThread: boolean;
+  uiDraft: { threadId: string | null; epoch: number; text: string } | null;
+  previewUiDraft: (threadId: string | null, epoch: number, text: string) => boolean;
 
   // Provider info
   provider: string;
@@ -50,7 +54,7 @@ function getStoredThreadId(): string | null {
   return localStorage.getItem(STORAGE_KEY);
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   streamingText: "",
   isStreaming: false,
@@ -58,6 +62,15 @@ export const useChatStore = create<ChatState>((set) => ({
 
   threads: [],
   activeThreadId: getStoredThreadId(),
+  uiEpoch: 0,
+  loadingThread: false,
+  uiDraft: null,
+  previewUiDraft: (threadId, epoch, text) => {
+    const s = get();
+    if (s.activeThreadId !== threadId || s.uiEpoch !== epoch || s.loadingThread) return false;
+    set({ uiDraft: { threadId, epoch, text } });
+    return true;
+  },
 
   provider: "",
   model: "",
@@ -103,7 +116,7 @@ export const useChatStore = create<ChatState>((set) => ({
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
-    set({ activeThreadId: id });
+    set((s) => ({ activeThreadId: id, uiEpoch: s.uiEpoch + 1, uiDraft: null, loadingThread: !!id, messages: [], streamingText: "", isStreaming: false, waiting: false }));
   },
 
   setProvider: (provider) => set({ provider }),
