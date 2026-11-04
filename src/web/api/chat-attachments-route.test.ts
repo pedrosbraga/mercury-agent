@@ -107,6 +107,16 @@ describe('POST /api/chat/send with attachments', () => {
     expect(seen[0].metadata?.attachments).toBeUndefined();
   });
 
+  it('forwards interactive UI only when the client explicitly opts into the known version', async () => {
+    const { seen } = recordingChannel();
+    expect((await send({ content: 'show a form', interactiveUi: 'mercury-ui-v1' })).status).toBe(200);
+    expect(seen[0].metadata?.interactiveUi).toBe('mercury-ui-v1');
+    for (const interactiveUi of [undefined, true, {}, 'mercury-ui-v2']) {
+      expect((await send({ content: 'hello', interactiveUi })).status).toBe(200);
+      expect(seen.at(-1)?.metadata?.interactiveUi).toBeUndefined();
+    }
+  });
+
   it('removes the stored files when the message cannot be sent', async () => {
     const { channel } = recordingChannel();
     channel.setRestrictUser(true);

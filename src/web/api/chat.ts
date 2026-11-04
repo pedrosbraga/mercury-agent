@@ -264,6 +264,8 @@ chat.post('/api/chat/send', async (c) => {
     attachments?: unknown;
     /** Session-scoped coding: 'auto' | 'plan' | 'execute' for this turn only. */
     programming?: unknown;
+    /** Explicit client support for the constrained, non-executable chat UI. */
+    interactiveUi?: unknown;
     /** Folder the coding turn works in (an existing directory). */
     cwd?: unknown;
   }>();
@@ -300,7 +302,7 @@ chat.post('/api/chat/send', async (c) => {
       }
       codeCwd = resolvedCwd;
     }
-    webChannel.emitMessageInThread(text, session.id, session.id, undefined, undefined, undefined, upload.attachments, { ...(programming ? { programming, cwd: codeCwd } : {}), thisComputer: isThisComputer(c) });
+    webChannel.emitMessageInThread(text, session.id, session.id, undefined, undefined, undefined, upload.attachments, { ...(programming ? { programming, cwd: codeCwd } : {}), ...(body.interactiveUi === 'mercury-ui-v1' ? { interactiveUi: 'mercury-ui-v1' as const } : {}), thisComputer: isThisComputer(c) });
     return c.json({
       sent: true,
       sessionId: session.id,

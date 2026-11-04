@@ -99,6 +99,7 @@ import { MAX_EXECUTE_CONTINUATIONS, MAX_VERIFICATION_CONTINUATIONS, executeConti
 import { classifyTurnEnd, stepsExhaustedPrompt, STEPS_PAUSED_BANNER, WORK_NOT_STARTED_BANNER, VERIFICATION_FAILED_BANNER, type LoopEndCause } from './completion-verdict.js';
 import { HISTORY_TOKEN_BUDGET, HISTORY_TOKEN_BUDGET_SAVER, TOOL_TRACE_KIND, selectHistoryWindow, toModelMessage, withReasoningParts, formatToolTrace, formatToolTraceLine, summarizeToolArgs, summarizeToolResult, detectRepetitionLoop } from './context-window.js';
 import { buildSystemPrompt as assembleSystemPrompt, budgetContext } from './system-prompt.js';
+import { interactiveUiSection } from './interactive-ui.js';
 import { buildStatusVerbPrompt, parseStatusVerbs, shouldRefreshStatusVerbs } from './status-verbs.js';
 import { verbPoolFor } from '../ui/status-word.js';
 import { StallWatchdog } from './stall-watchdog.js';
@@ -3112,6 +3113,8 @@ export class Agent {
       }
 
       let systemPrompt = this.buildSystemPrompt();
+      const uiGuide = interactiveUiSection(msg.channelType, msg.metadata?.interactiveUi);
+      if (uiGuide) systemPrompt += '\n\n' + uiGuide;
       if (chatFolder) systemPrompt += `\n- Files you make go in the working directory (this chat's folder in the owner's Mercury artifacts folder), unless the owner names another place. Use relative paths or that folder; never write loose files into the home folder.`;
       if (msg.metadata?.workContinuation === true) {
         const attempt = typeof msg.metadata.continuationAttempt === 'number' ? msg.metadata.continuationAttempt : 1;
