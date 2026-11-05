@@ -5,7 +5,9 @@
   "description": "Mercury Desktop — native shell for the Mercury agent runtime",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/excalidraw-assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/excalidraw-assets.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -16,6 +18,7 @@
     "icons": "node scripts/icons/build.mjs"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@json-render/core": "0.21.4",

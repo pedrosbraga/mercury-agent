@@ -5,6 +5,8 @@ import { usePulsePolling } from "~/app/pulse";
 import { useVoiceFeed } from "~/app/voice";
 import { useHealthStore } from "~/app/health";
 import { registerBuiltinStatusItems } from "~/extensions/builtin-status";
+import { registerBuiltinDeskApps } from "~/desk/builtin";
+import { preloadWhenIdle } from "~/desk/registry";
 import type { Connection } from "~/shell/connections";
 import type { HealthInfo } from "~/api/types";
 import { Rail } from "./Rail";
@@ -27,6 +29,7 @@ import { Alerts } from "~/components/Alerts";
 import { OwnerApprovalCards, WaitingForOwner } from "~/components/OwnerApprovals";
 
 registerBuiltinStatusItems();
+registerBuiltinDeskApps();
 
 /**
  * Everything after a connection is up:
@@ -44,6 +47,7 @@ export function Workspace({ connection, health, onSwitchConnection }: { connecti
   useVoiceFeed(connection.id);
 
   useEffect(() => { useHealthStore.getState().set(health); }, [health]);
+  useEffect(() => { preloadWhenIdle(); }, []);
 
   useEffect(() => {
     void refreshThreads();

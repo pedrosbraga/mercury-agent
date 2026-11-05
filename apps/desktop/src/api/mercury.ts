@@ -5,6 +5,7 @@
 
 import { http, ApiError } from "./client";
 import type { CommandEntry } from "~/views/chat/picker";
+import type { DeskItem, DeskItemMeta } from "~/desk/types";
 import type { SkillDraft,
   BotApproval, BotInboxEntry, BotManifest, BotPlan, CrewSpec, BotRunRecord, BotStatus, BotTier, BotTierId, ChatMessage, ChatSettings, ChatThread, CodeStatus, HealthInfo,
   McpServer, ModelsResponse, CodeMode, CostReport, Deliverable, RunTranscript, PairResponse, PendingPair, OwnerApproval, PluginItem, ReasoningChoice, Skill, DeviceSummary,
@@ -100,6 +101,16 @@ export const chat = {
   models: () => http.get<ModelsResponse>("/api/chat/models"),
   switchModel: (provider: string, model?: string) => http.post<{ ok: boolean; message: string }>("/api/chat/models/switch", { provider, model }),
   setReasoning: (provider: string, model: string, reasoning: ReasoningChoice | null) => http.post<{ ok: boolean }>("/api/chat/models/prefs", { provider, model, reasoning }),
+};
+
+/** The workspace desk next to a chat: documents made by desk apps, kept per conversation. */
+export const desk = {
+  list: (scope: string) => http.get<{ items: DeskItemMeta[] }>(`/api/desk/${encodeURIComponent(scope)}`).then((r) => r.items),
+  create: (scope: string, body: { app: string; title?: string; data?: unknown }) => http.post<{ item: DeskItemMeta }>(`/api/desk/${encodeURIComponent(scope)}/items`, body).then((r) => r.item),
+  get: (scope: string, id: string) => http.get<{ item: DeskItem }>(`/api/desk/${encodeURIComponent(scope)}/items/${encodeURIComponent(id)}`).then((r) => r.item),
+  save: (scope: string, id: string, body: { data?: unknown; title?: string; baseRev?: number }) => http.put<{ item: DeskItemMeta }>(`/api/desk/${encodeURIComponent(scope)}/items/${encodeURIComponent(id)}`, body).then((r) => r.item),
+  remove: (scope: string, id: string) => http.delete<{ deleted: boolean }>(`/api/desk/${encodeURIComponent(scope)}/items/${encodeURIComponent(id)}`),
+  adopt: (from: string, to: string) => http.post<{ moved: number }>(`/api/desk/${encodeURIComponent(from)}/adopt`, { to }),
 };
 
 export const workspace = {

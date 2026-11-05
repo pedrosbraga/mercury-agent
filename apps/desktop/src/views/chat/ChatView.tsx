@@ -14,6 +14,9 @@ import { OptimusFace } from "~/components/OptimusFace";
 import { useVoice, phaseOf, PHASE_LABEL, setOnCallTurn, useCall } from "~/app/voice";
 import { cx } from "~/lib/cx";
 import * as api from "~/api/mercury";
+import { DeskPanel } from "~/desk/DeskPanel";
+import { DeskToggle } from "~/desk/DeskToggle";
+import { DRAFT, useDesk } from "~/desk/store";
 
 /**
  * Chat: sessions on the left (with New chat), one conversation. Its own
@@ -31,6 +34,8 @@ export function ChatView() {
   const voice = useVoice();
   const voicePhase = phaseOf(voice);
   const nextStep = useNextStep();
+  const deskOpen = useDesk((s) => s.open);
+  const toggleDesk = useDesk((s) => s.toggle);
 
   const title = threads.find((t) => t.id === activeId)?.title || (activeId ? "Untitled" : "New chat");
   const codeSet = new Set(codeIds.map((c) => c.id));
@@ -62,6 +67,7 @@ export function ChatView() {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "n" && !e.shiftKey) { e.preventDefault(); void openThread("chat", null); }
       if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSidebar(); }
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "j") { e.preventDefault(); toggleDesk(); }
       if (mod && e.key.toLowerCase() === "s" && !e.shiftKey) { e.preventDefault(); toggleSaved(); }
       if (mod && e.key.toLowerCase() === "s" && e.shiftKey) {
         e.preventDefault();
@@ -72,11 +78,11 @@ export function ChatView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleSidebar, view, savedOnly, activeId, saved]);
+  }, [toggleSidebar, toggleDesk, view, savedOnly, activeId, saved]);
 
   return (
     <ConversationContext.Provider value={conversations.chat}>
-      <div className="flex h-full min-h-0">
+      <div className="relative flex h-full min-h-0">
         {sidebar && (
           <ThreadList
             threads={threads.filter((t) => listOf(t, codeSet) === "chat")}
@@ -108,6 +114,7 @@ export function ChatView() {
         )}
         {voiceOpen ? <VoiceConversation /> : (
         <Conversation
+          headerEnd={<DeskToggle />}
           header={
             <>
               <Tooltip label={sidebar ? "Hide sessions" : "Show sessions"} shortcut="⌘B" side="bottom">
@@ -136,6 +143,8 @@ export function ChatView() {
           composer={{ surface: "chat", placeholder: nextStep ?? "Ask anything…", suggestion: nextStep ?? undefined }}
         />
         )}
+        {/* The desk belongs to the chat on screen. Closed, it costs nothing: not even mounted. */}
+        {deskOpen && !voiceOpen && <DeskPanel scope={activeId ?? DRAFT} />}
       </div>
     </ConversationContext.Provider>
   );

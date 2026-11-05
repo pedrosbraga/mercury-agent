@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { commandCatalog } from '../../core/commands/catalog.js';
 import { getPluginManager } from '../../plugins/manager.js';
 import { artifactStore } from '../../artifacts/store.js';
+import { DeskStore } from '../../desk/store.js';
 import { favicons } from '../favicons.js';
 import { scopedProgrammingState } from '../../core/programming-mode.js';
 import { isInsideWorkspace } from './workspace-ide.js';
@@ -783,6 +784,8 @@ chat.post('/api/chat/threads/:id/delete', async (c) => {
     // Its artifacts go with it (Mercury's copies; the owner's original files stay).
     let artifactsRemoved = 0;
     try { artifactsRemoved = artifactStore().removeThread(target.id); } catch { /* the hourly sweep catches it */ }
+    // So do the boards it had on the workspace desk.
+    try { new DeskStore(join(getMercuryHome(), 'desk')).removeScope(target.id); } catch { /* nothing to remove */ }
     return c.json({ deleted: true, sessionId: deleted.id, syncPending, artifactsRemoved });
   } catch {
     return c.json({ deleted: false, error: 'Thread not found' }, 404);

@@ -22,7 +22,7 @@ const PAGE = 30;
  * surface it is rendered in (ConversationContext), so Chat and Code use
  * the same component without sharing any state.
  */
-export function Conversation({ header, empty, composer }: { header: ReactNode; empty: ReactNode; composer: ComposerProps }) {
+export function Conversation({ header, headerEnd, empty, composer }: { header: ReactNode; headerEnd?: ReactNode; empty: ReactNode; composer: ComposerProps }) {
   const store = useConversationStore();
   const messages = useConversation((s) => s.messages);
   const streaming = useConversation((s) => s.streaming);
@@ -83,6 +83,7 @@ export function Conversation({ header, empty, composer }: { header: ReactNode; e
     <section className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-line px-4" data-tauri-drag-region>
         <div className="flex min-w-0 flex-1 items-center gap-3">{header}</div>
+        {headerEnd}
         <StateLabel state={agent} detail={step?.tool ? `${step.tool}${step.total ? ` ${step.current}/${step.total}` : ""}` : undefined} />
       </header>
 

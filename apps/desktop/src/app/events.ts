@@ -14,6 +14,7 @@ import { useBots, useChat, useRuntimeState, type AgentState } from "./store";
 import { conversations, useCodeSessions, type ConversationStore, type Surface } from "./conversation";
 import type { ArtifactRef } from "~/api/artifacts";
 import { useNotify } from "./notify/store";
+import { useDesk } from "~/desk/store";
 
 export function useRuntimeEvents(enabled: boolean): void {
   const chatId = conversations.chat((s) => s.activeId);
@@ -397,6 +398,8 @@ export async function sendMessage(surface: Surface, content: string, attachments
   if (!id) {
     const thread = await api.chat.createThread(surface === "code" ? `Code · ${content.slice(0, 40)}` : undefined);
     id = thread.id;
+    // Whatever was on the workspace desk of this not-yet-saved chat now belongs to the new thread.
+    if (surface === "chat") await useDesk.getState().adopt(id).catch(() => {});
     store.getState().setActive(id);
     store.getState().setMessages([]);
     if (surface === "code") useCodeSessions.getState().upsert({ id, folder: code?.folder ?? null, createdAt: new Date().toISOString() });
