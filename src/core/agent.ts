@@ -3157,7 +3157,7 @@ export class Agent {
       }
       const canonicalMessageId = typeof msg.metadata?.canonicalMessageId === 'string' ? msg.metadata.canonicalMessageId : undefined;
       const requestId = typeof msg.metadata?.requestId === 'string' ? msg.metadata.requestId : undefined;
-      this.sessions.appendMessage(canonicalSession.id, {
+      const storedUserMessage = this.sessions.appendMessage(canonicalSession.id, {
         id: canonicalMessageId,
         role: 'user',
         content: msg.content,
@@ -3261,6 +3261,15 @@ export class Agent {
       // frames as images. Best-effort: a failure leaves the path in the
       // transcript, as before.
       await this.prepareVideo(msg);
+      // The stored copy of this message predates the video step: save the
+      // transcript with it, so later turns can still answer about the clip.
+      if (typeof msg.metadata?.videoNote === 'string' && canonicalSessionId && storedUserMessage) {
+        try {
+          this.sessions.updateMessageMetadata(canonicalSessionId, storedUserMessage.id, { videoNote: msg.metadata.videoNote });
+        } catch (err) {
+          logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'Could not save the video transcript to the session');
+        }
+      }
 
       const providerContextId = msg.sessionId ?? (typeof msg.metadata?.sessionId === 'string' ? msg.metadata.sessionId : msg.channelId);
       const channelOverride = this.channelProviderOverrides.get(providerContextId);

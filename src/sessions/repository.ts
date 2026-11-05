@@ -222,6 +222,20 @@ export class SessionRepository {
   }
 
   /**
+   * Merge extra metadata into a stored message (e.g. the video transcript,
+   * which only exists after the message was first saved). Missing message: no-op.
+   */
+  updateMessageMetadata(sessionRef: string, messageId: string, patch: Record<string, unknown>): void {
+    const session = this.get(sessionRef);
+    const message = session.messages.find((m) => m.id === messageId.toLowerCase());
+    if (!message) return;
+    message.metadata = { ...message.metadata, ...patch };
+    this.touchAndWrite(session);
+    this.writeIndex();
+    this.notifyMutation();
+  }
+
+  /**
    * Take back a message and everything after it (undo the last exchange):
    * it leaves the history the agent reads, so Mercury forgets it too.
    * Returns what was removed, oldest first.

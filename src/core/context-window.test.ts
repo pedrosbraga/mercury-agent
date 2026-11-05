@@ -120,3 +120,18 @@ describe('tool trace formatting', () => {
     expect(trace).toContain('21 more tool calls');
   });
 });
+
+describe('toModelMessage with a video note', () => {
+  it('gives later turns the transcript saved in metadata, once', () => {
+    const note = '[Video audio transcript:\nO que você está comendo aí?]';
+    const user = entry('user', 'Descreve o vídeo', { metadata: { videoNote: note } });
+    expect(toModelMessage(user).content).toBe(`Descreve o vídeo\n\n${note}`);
+    const already = entry('user', `Descreve o vídeo\n\n${note}`, { metadata: { videoNote: note } });
+    expect(toModelMessage(already).content).toBe(`Descreve o vídeo\n\n${note}`);
+  });
+
+  it('ignores videoNote on assistant messages and plain messages', () => {
+    expect(toModelMessage(entry('assistant', 'oi', { metadata: { videoNote: 'x' } })).content).toBe('oi');
+    expect(toModelMessage(entry('user', 'oi')).content).toBe('oi');
+  });
+});

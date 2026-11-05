@@ -67,7 +67,11 @@ export interface ModelMessage {
 }
 
 export function toModelMessage(entry: SessionMessage): ModelMessage {
-  const message: ModelMessage = { role: entry.role as 'user' | 'assistant', content: entry.content };
+  // A video's transcript and frame times are learned after the message is
+  // stored, so they live in metadata; later turns need them to answer about the clip.
+  const videoNote = entry.role === 'user' && typeof entry.metadata?.videoNote === 'string' ? entry.metadata.videoNote : '';
+  const content = videoNote && !entry.content.includes(videoNote) ? `${entry.content}\n\n${videoNote}` : entry.content;
+  const message: ModelMessage = { role: entry.role as 'user' | 'assistant', content };
   if (entry.role === 'assistant' && typeof entry.reasoning === 'string' && entry.reasoning.trim()) {
     REASONING.set(message, entry.reasoning);
   }

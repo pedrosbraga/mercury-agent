@@ -10,6 +10,18 @@ function fixture() {
 }
 
 describe('SessionRepository', () => {
+  it('saves late metadata (video transcript) on a stored message and keeps it after reload', () => {
+    const { root, repository } = fixture();
+    const created = repository.create({});
+    const msg = repository.appendMessage(created.id, { role: 'user', content: 'describe', metadata: { channelType: 'cli' } });
+    repository.updateMessageMetadata(created.id, msg.id, { videoNote: '[Video audio transcript:\nolá]' });
+    repository.updateMessageMetadata(created.id, 'missing-id', { videoNote: 'x' });
+    const reloaded = new SessionRepository({ rootDir: join(root, 'sessions'), autoMigrate: false });
+    const stored = reloaded.get(created.id).messages[0];
+    expect(stored.content).toBe('describe');
+    expect(stored.metadata).toMatchObject({ channelType: 'cli', videoNote: '[Video audio transcript:\nolá]' });
+  });
+
   it('creates, lists, gets, and reloads atomically persisted sessions', () => {
     const { root, repository } = fixture();
     const created = repository.create({ title: 'Test session', alias: 'amber-comet' });
