@@ -55,3 +55,8 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# File chooser must not abort the app when macOS returns no NSOpenPanel
+# (see vendor/wry/src/wkwebview/class/wry_web_view_ui_delegate.rs).
+[patch.crates-io]
+wry = { path = "vendor/wry" }
