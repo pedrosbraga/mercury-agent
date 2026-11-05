@@ -58,6 +58,7 @@ export const API_FEATURES: readonly string[] = Object.freeze([
   'updates',           // GET /api/updates[?seen=1], POST /api/updates/check, POST /api/updates/server { version?, now? } (202; remote → 428 owner), POST /api/updates/server/cancel — see UPDATES.md
   'chat.interactive-ui.v1', // POST /api/chat/send { interactiveUi: 'mercury-ui-v1' }; constrained json-render blocks, draft-only actions
   'chat.research',     // SSE 'research' / 'research_plan' / 'research_plan_resolved' / 'notice'; GET /api/chat/threads/:id/research, POST …/research/finish, …/research/off, POST /api/chat/research/plan/:id; message.research; step_done { failed, reason }
+  'chat.suggestion',   // GET /api/chat/threads/:id/suggestion → { suggestion: string | null } — the next message the owner could send
 ]);
 
 export interface ApiContractInfo {

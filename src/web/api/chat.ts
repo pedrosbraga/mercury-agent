@@ -84,6 +84,11 @@ let busyFn: ((sessionId: string) => boolean) | null = null;
 export function setSessionBusyLookup(fn: ((sessionId: string) => boolean) | null): void {
   busyFn = fn;
 }
+let nextStepFn: ((sessionId: string) => Promise<string | null>) | null = null;
+/** The suggested next message for a chat (shown as the box's placeholder). */
+export function setNextStepSuggester(fn: typeof nextStepFn): void {
+  nextStepFn = fn;
+}
 type QueueState = { state: 'running' | 'queued' | 'none'; position?: number; busyWith?: string; busySessionId?: string };
 let queueControls: { state: (threadId: string) => QueueState; prioritize: (threadId: string) => number } | null = null;
 /** The agent's line of turns: where a chat stands, and moving one to the front ("do mine first"). */
@@ -875,6 +880,16 @@ chat.post('/api/chat/threads/:id/undo', async (c) => {
   const removed = sessions.removeFrom(session.id, last.id);
   const attachments = (last.metadata as { attachments?: unknown } | undefined)?.attachments;
   return c.json({ ok: true, content: last.content, attachments: Array.isArray(attachments) ? attachments : [], removed: removed.length });
+});
+
+/** What the owner could send next, from the chat so far: { suggestion: string | null }. Never an error the UI must show. */
+chat.get('/api/chat/threads/:id/suggestion', async (c) => {
+  const id = c.req.param('id');
+  if (!sessions) return c.json({ error: 'Session repository not initialized' }, 503);
+  try { sessions.get(id); } catch { return c.json({ error: 'Thread not found' }, 404); }
+  if (!nextStepFn) return c.json({ suggestion: null });
+  const suggestion = await nextStepFn(id).catch(() => null);
+  return c.json({ suggestion });
 });
 
 chat.post('/api/chat/threads/:id/messages', async (c) => {

@@ -92,6 +92,8 @@ export const chat = {
   /** Start (with these sub-questions) or cancel a proposed research plan. */
   answerResearchPlan: (id: string, action: "start" | "cancel", questions?: string[]) => http.post<{ ok: boolean }>(`/api/chat/research/plan/${encodeURIComponent(id)}`, { action, questions }),
   /** Every slash command with what it does (the "/" picker). */
+  /** What you could send next, from this chat so far (the box's placeholder). Older runtimes answer 404. */
+  suggestion: (threadId: string) => http.get<{ suggestion: string | null }>(`/api/chat/threads/${encodeURIComponent(threadId)}/suggestion`),
   commands: () => http.get<{ commands: CommandEntry[] }>("/api/chat/commands").then((r) => r.commands),
   settings: () => http.get<ChatSettings>("/api/chat/settings"),
   updateSettings: (patch: Partial<ChatSettings>) => http.put<ChatSettings>("/api/chat/settings", patch),

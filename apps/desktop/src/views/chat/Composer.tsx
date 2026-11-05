@@ -54,13 +54,15 @@ export interface ComposerProps {
   /** Shift+Tab cycles the mode; the chip shows it. */
   onCycleMode?: () => void;
   modeLabel?: string;
+  /** Shown as the placeholder by the caller; Tab on an empty box puts it in. */
+  suggestion?: string;
 }
 
 /** Loaded once per app run: the "/" commands and the "#" skills. */
 let commandCache: CommandEntry[] | null = null;
 let skillCache: SkillEntry[] | null = null;
 
-export function Composer({ surface, placeholder, code, extra, blockedReason, mono, draft, onDraftConsumed, onCycleMode, modeLabel }: ComposerProps) {
+export function Composer({ surface, placeholder, code, extra, blockedReason, mono, draft, onDraftConsumed, onCycleMode, modeLabel, suggestion }: ComposerProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -312,6 +314,7 @@ export function Composer({ surface, placeholder, code, extra, blockedReason, mon
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(); }
               if (e.key === "Escape" && text) { e.preventDefault(); setText(""); }
               else if (e.key === "Escape" && busy) { e.preventDefault(); stop(); }
+              if (e.key === "Tab" && !e.shiftKey && suggestion && !text && !token && files.length === 0) { e.preventDefault(); setText(suggestion); return; }
               if (e.key === "Tab" && e.shiftKey && onCycleMode) { e.preventDefault(); onCycleMode(); }
             }}
             placeholder={!connected ? "Waiting for Mercury…" : blockedReason ?? (researchNext !== "off" && !token ? "What should Mercury research?" : token ? (token.hint || (token.kind === "skill" ? "What should the skill do?" : "Add details, or press Enter")) : placeholder)}

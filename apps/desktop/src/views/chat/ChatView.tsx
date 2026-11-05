@@ -9,6 +9,7 @@ import { Mark } from "~/components/Logo";
 import { ThreadList } from "./ThreadList";
 import { Conversation } from "./Conversation";
 import { VoiceConversation } from "./VoiceConversation";
+import { useNextStep } from "./nextStep";
 import { OptimusFace } from "~/components/OptimusFace";
 import { useVoice, phaseOf, PHASE_LABEL, setOnCallTurn, useCall } from "~/app/voice";
 import { cx } from "~/lib/cx";
@@ -29,6 +30,7 @@ export function ChatView() {
   const setVoiceOpen = useUi((s) => s.setVoiceOpen);
   const voice = useVoice();
   const voicePhase = phaseOf(voice);
+  const nextStep = useNextStep();
 
   const title = threads.find((t) => t.id === activeId)?.title || (activeId ? "Untitled" : "New chat");
   const codeSet = new Set(codeIds.map((c) => c.id));
@@ -131,7 +133,7 @@ export function ChatView() {
               <p className="max-w-[460px] text-base text-ink3">This chat is empty. Ask, delegate, or think out loud. Mercury remembers what matters.</p>
             </div>
           }
-          composer={{ surface: "chat", placeholder: "Ask anything…" }}
+          composer={{ surface: "chat", placeholder: nextStep ?? "Ask anything…", suggestion: nextStep ?? undefined }}
         />
         )}
       </div>

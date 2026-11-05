@@ -51,6 +51,7 @@ import { WebChannel } from '../channels/web.js';
 import type { ArrowSelectOption } from '../utils/arrow-select.js';
 import { setAskUserHandler } from '../capabilities/interaction/ask-user.js';
 import { classifyResearchIntent } from './research-intent.js';
+import { suggestNextStep } from './next-step.js';
 import { closePlan, coverageSection, parsePlanLines, reportBody, reportFileName, RESEARCH_PLAN_SYSTEM, RESEARCH_WRITE_SYSTEM, sourcesAppendix, unansweredFrom, type ResearchRun } from './research-run.js';
 import type { SpotifyClient } from '../spotify/client.js';
 import { fallbackSessionTitle, isThinOpening, normalizeGeneratedSessionTitle, SessionResolutionError, type SessionRepository } from '../sessions/index.js';
@@ -1406,6 +1407,40 @@ export class Agent {
     });
     logger.debug({ verdict }, 'Research intent');
     return verdict === 'research';
+  }
+
+  private readonly nextStepCache = new Map<string, { lastId: string; text: string | null }>();
+
+  /**
+   * The line the chat box shows as its placeholder: what the owner could send
+   * next. One small call per finished reply, cached by that reply.
+   */
+  async suggestNextStepFor(sessionId: string): Promise<string | null> {
+    if (this.isBusyWith(sessionId)) return null;
+    const messages = this.sessions.get(sessionId).messages;
+    const lastId = messages[messages.length - 1]?.id;
+    if (!lastId) return null;
+    const hit = this.nextStepCache.get(sessionId);
+    if (hit && hit.lastId === lastId) return hit.text;
+    let model: ReturnType<ReturnType<ProviderRegistry['getDefault']>['getModelInstance']>;
+    try {
+      model = this.learningProviders().getDefault().getModelInstance();
+    } catch {
+      return null;
+    }
+    let text: string | null = null;
+    try {
+      text = await suggestNextStep(messages, async (system, user) => {
+        const result = await generateText({ model, system, messages: [{ role: 'user', content: user }], maxOutputTokens: 60, abortSignal: AbortSignal.timeout(15_000) });
+        return result.text;
+      });
+    } catch (err) {
+      logger.debug({ err }, 'Next-step suggestion failed');
+      return null; // not cached: the next ask may work
+    }
+    this.nextStepCache.set(sessionId, { lastId, text });
+    if (this.nextStepCache.size > 50) this.nextStepCache.delete(this.nextStepCache.keys().next().value as string);
+    return text;
   }
 
   private async promptResearchMode(msg: ChannelMessage, workKey?: string): Promise<void> {
