@@ -15,6 +15,8 @@ import type { ChannelMessage } from '../types/channel.js';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const MAX_FILES = 4;
+/** A video turns into up to 12 frames, so the cap on what reaches the model is wider than the upload cap. */
+const MAX_MODEL_FILES = 16;
 const MAX_IMAGE_EDGE = 2048;
 
 interface Attachment {
@@ -57,7 +59,7 @@ export function attachmentsOf(msg: ChannelMessage): Attachment[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((a): a is Attachment => !!a && typeof (a as Attachment).path === 'string' && typeof (a as Attachment).kind === 'string')
-    .slice(0, MAX_FILES);
+    .slice(0, MAX_MODEL_FILES);
 }
 
 function isPdf(a: Attachment): boolean {
@@ -119,7 +121,7 @@ export function withAttachments<T extends { role: string; content: unknown }>(
   declaredVision?: boolean,
 ): T[] {
   const files = attachmentsOf(msg);
-  if (!files.length) return messages;
+  if (!files.length && typeof msg.metadata?.videoNote !== 'string') return messages;
   const parts: Array<Record<string, unknown>> = [];
   const notes: string[] = [];
   for (const a of files) {
@@ -138,7 +140,10 @@ export function withAttachments<T extends { role: string; content: unknown }>(
       if (modelReadsPdf(provider, model) && size <= MAX_PDF_BYTES) parts.push({ type: 'file', data: readFileSync(a.path), mediaType: 'application/pdf', filename: a.name ?? basename(a.path) });
     }
   }
-  if (!parts.length && !notes.length) return messages;
+  // What the video step learned (frame times, transcript) — the stored copy
+  // of the user message predates it, so it travels in metadata.
+  const videoNote = typeof msg.metadata?.videoNote === 'string' ? msg.metadata.videoNote : '';
+  if (!parts.length && !notes.length && !videoNote) return messages;
   // The last user message is this turn's (history comes first).
   let idx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -147,7 +152,8 @@ export function withAttachments<T extends { role: string; content: unknown }>(
   if (idx < 0) return messages;
   const current = messages[idx];
   const text = typeof current.content === 'string' ? current.content : msg.content;
-  const content = [{ type: 'text', text: notes.length ? `${text}\n\n(${notes.join(' ')})` : text }, ...parts];
+  const withVideo = videoNote && !text.includes(videoNote) ? `${text}\n\n${videoNote}` : text;
+  const content = [{ type: 'text', text: notes.length ? `${withVideo}\n\n(${notes.join(' ')})` : withVideo }, ...parts];
   const out = messages.slice();
   out[idx] = { ...current, content } as T;
   return out;

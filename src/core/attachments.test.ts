@@ -82,4 +82,21 @@ describe('a declared capability beats the name-based guess', () => {
     expect(modelSeesImages('deepseek', 'deepseek-flash')).toBe(false);
     expect(modelSeesImages('anthropic', 'claude-sonnet-4-5')).toBe(true);
   });
+
+  it('a video turn reaches the model with all its frames and the transcript note, even though the stored message predates them', () => {
+    const frames = Array.from({ length: 7 }, () => ({ kind: 'image', path: img }));
+    const m = msg(frames);
+    m.metadata = { ...m.metadata, videoNote: '[Video audio transcript:\nO que você está comendo?]' };
+    const out = withAttachments(history, m, 'openai', 'gpt-4.1-mini');
+    const content = out[2].content as unknown as Array<Record<string, unknown>>;
+    expect(content.filter((p) => p.type === 'image')).toHaveLength(7);
+    expect(String(content[0].text)).toContain('O que você está comendo?');
+  });
+
+  it('the transcript still reaches a text-only model', () => {
+    const m = msg([]);
+    m.metadata = { videoNote: '[Video audio transcript:\nolá]' };
+    const out = withAttachments(history, m, 'deepseek', 'deepseek-chat');
+    expect(String((out[2].content as unknown as Array<Record<string, unknown>>)[0].text)).toContain('olá');
+  });
 });

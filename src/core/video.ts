@@ -191,5 +191,8 @@ export async function prepareVideoAttachments(msg: ChannelMessage, opts: VideoPr
   if (notes.length) extra.push(`[Video frames: ${notes.join('; ')}. Only these frames were seen — anything between them was not.]`);
   if (transcripts.length) extra.push(`[Video audio transcript:\n${transcripts.join('\n\n')}]`);
   else if (frames.length) extra.push('[Video audio: not transcribed — speech in the clip was NOT heard.]');
-  if (extra.length) msg.content = [msg.content, `\n\n${extra.join('\n')}`].filter(Boolean).join('\n');
+  if (extra.length) {
+    msg.content = [msg.content, `\n\n${extra.join('\n')}`].filter(Boolean).join('\n');
+    msg.metadata = { ...msg.metadata, videoNote: extra.join('\n') };
+  }
 }
