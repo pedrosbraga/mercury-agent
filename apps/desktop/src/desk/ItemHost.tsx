@@ -35,6 +35,23 @@ export function ItemHost({ scope, meta, onSaveState }: { scope: string; meta: De
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, meta.id]);
 
+  // Someone else (Mercury drawing on the board) raised the revision: show what they wrote.
+  // Skipped while this window still has unsaved changes; its own save then wins, as before.
+  useEffect(() => {
+    if (loaded.state !== "ready" || meta.rev <= rev.current) return;
+    if (saverRef.current && saverRef.current.state() !== "saved") return;
+    let alive = true;
+    loadItem(scope, meta)
+      .then((item) => {
+        if (!alive || item.rev <= rev.current) return;
+        rev.current = item.rev;
+        setLoaded({ state: "ready", item });
+      })
+      .catch(() => { /* try again on the next look */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta.rev, loaded.state]);
+
   // One saver per item; flushed when the tab goes away, the window hides or the page unloads.
   useEffect(() => {
     const saver = createSaver({
@@ -82,7 +99,7 @@ export function ItemHost({ scope, meta, onSaveState }: { scope: string; meta: De
   return (
     <ErrorBoundary label={app.title} resetKey={`${scope}/${meta.id}`}>
       <Suspense fallback={<Loading label={`Loading ${app.title}`} />}>
-        <App data={loaded.item.data} theme={theme} change={change} />
+        <App key={loaded.item.rev} data={loaded.item.data} theme={theme} change={change} />
       </Suspense>
     </ErrorBoundary>
   );

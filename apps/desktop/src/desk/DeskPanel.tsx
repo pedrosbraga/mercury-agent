@@ -56,6 +56,14 @@ export function DeskPanel({ scope }: { scope: string }) {
   }, []);
 
   useEffect(() => { void load(scope); }, [scope, load]);
+  // Mercury (or another window) can draw on a board while it is open: look for new revisions now and then.
+  // The list is cheap (no drawing data); an item reloads itself only when its revision moved.
+  useEffect(() => {
+    const look = () => { if (document.visibilityState === "visible") void load(scope); };
+    const timer = setInterval(look, 3000);
+    window.addEventListener("focus", look);
+    return () => { clearInterval(timer); window.removeEventListener("focus", look); };
+  }, [scope, load]);
   useEffect(() => { setSaveState("saved"); }, [scope, activeId]);
 
   function onHandleDown(e: React.PointerEvent<HTMLDivElement>) {
