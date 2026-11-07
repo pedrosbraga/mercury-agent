@@ -32,6 +32,9 @@ export interface ScheduledTaskManifest {
    * once, when the task was created; nothing else is pre-approved.
    */
   allowTools?: string[];
+  /** Run this routine on a specific provider (and model) instead of the chat default, e.g. a cheap model. */
+  provider?: string;
+  model?: string;
 }
 
 const SCHEDULES_FILE = 'schedules.yaml';

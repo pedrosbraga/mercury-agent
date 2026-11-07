@@ -25,6 +25,7 @@ import { onDeviceNewLocation } from '../web/middleware.js';
 import { artifactKindLabel, artifactRef, formatBytes } from '../artifacts/ref.js';
 import { getMercuryHome } from '../utils/config.js';
 import { createProvider } from '../providers/registry.js';
+import { routineModelFromMetadata, routineModelMetadata, routineModelSpec } from './routine-model.js';
 import type { BaseProvider } from '../providers/base.js';
 import { Lifecycle } from './lifecycle.js';
 import { Scheduler } from './scheduler.js';
@@ -2483,6 +2484,31 @@ export class Agent {
     }));
   }
 
+  private routineProviders = new Map<string, BaseProvider>();
+
+  /** Provider a routine asked for (cached per provider+model). Undefined → the chat default is used. */
+  private async routineProviderFor(spec: { provider: string; model?: string }): Promise<BaseProvider | undefined> {
+    const cfg = getActiveProviders(this.config).find((p) => p.name === spec.provider);
+    if (!cfg) {
+      logger.warn({ provider: spec.provider }, 'Routine asked for a provider that is not configured — using the default');
+      return undefined;
+    }
+    const key = `${spec.provider}/${spec.model ?? cfg.model}`;
+    const cached = this.routineProviders.get(key);
+    if (cached) return cached;
+    try {
+      const created = await createProvider(
+        { ...cfg, model: spec.model || cfg.model },
+        spec.provider === 'mercuryCloud' ? getCloudTokenStore() : undefined,
+      );
+      if (created) this.routineProviders.set(key, created);
+      return created ?? undefined;
+    } catch (err) {
+      logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'Could not create the routine provider — using the default');
+      return undefined;
+    }
+  }
+
   async setChannelProviderOverride(
     channelId: string,
     providerName: string,
@@ -3307,7 +3333,11 @@ export class Agent {
       }
 
       const providerContextId = msg.sessionId ?? (typeof msg.metadata?.sessionId === 'string' ? msg.metadata.sessionId : msg.channelId);
-      const channelOverride = this.channelProviderOverrides.get(providerContextId);
+      const routineSpec = msg.senderId === 'system' ? routineModelFromMetadata(msg.metadata) : null;
+      const routineProvider = routineSpec ? await this.routineProviderFor(routineSpec) : undefined;
+      const channelOverride = routineProvider
+        ? { providerName: routineProvider.name, modelName: routineProvider.getModel(), provider: routineProvider }
+        : this.channelProviderOverrides.get(providerContextId);
       const baseFallback: BaseProvider[] = channelOverride
         ? [channelOverride.provider, ...this.providers.getFallbackIterator(channelOverride.providerName)]
           .filter((provider, index, list) => list.findIndex((item) => item.name === provider.name && item.getModel() === provider.getModel()) === index)
@@ -5056,7 +5086,7 @@ export class Agent {
     });
   }
 
-  async processInternalPrompt(prompt: string, channelId?: string, channelType?: string, opts: { allowTools?: string[]; scheduledTaskId?: string } = {}): Promise<void> {
+  async processInternalPrompt(prompt: string, channelId?: string, channelType?: string, opts: { allowTools?: string[]; scheduledTaskId?: string; provider?: string; model?: string } = {}): Promise<void> {
     const syntheticMsg: ChannelMessage = {
       id: `internal-${Date.now().toString(36)}`,
       channelId: channelId || 'internal',
@@ -5064,8 +5094,8 @@ export class Agent {
       senderId: 'system',
       content: prompt,
       timestamp: Date.now(),
-      ...(opts.allowTools?.length || opts.scheduledTaskId
-        ? { metadata: { ...(opts.allowTools?.length ? { allowTools: opts.allowTools } : {}), ...(opts.scheduledTaskId ? { scheduledTaskId: opts.scheduledTaskId } : {}) } }
+      ...(opts.allowTools?.length || opts.scheduledTaskId || opts.provider
+        ? { metadata: { ...(opts.allowTools?.length ? { allowTools: opts.allowTools } : {}), ...(opts.scheduledTaskId ? { scheduledTaskId: opts.scheduledTaskId } : {}), ...routineModelMetadata(routineModelSpec(opts)) } }
         : {}),
     };
     this.enqueueMessage(syntheticMsg);
@@ -5114,7 +5144,7 @@ export class Agent {
       if (!prompt) {
         prompt = `Execute scheduled task: ${manifest.description}`;
       }
-      await this.processInternalPrompt(prompt, manifest.sourceChannelId, manifest.sourceChannelType, { allowTools: manifest.allowTools, scheduledTaskId: manifest.id });
+      await this.processInternalPrompt(prompt, manifest.sourceChannelId, manifest.sourceChannelType, { allowTools: manifest.allowTools, scheduledTaskId: manifest.id, provider: manifest.provider, model: manifest.model });
     } catch (err) {
       logger.error({ err, task: manifest.id }, 'Scheduled task execution failed');
     }
